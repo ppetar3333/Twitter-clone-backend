@@ -1,0 +1,148 @@
+version: '2.1'
+services:
+  auth-microservice:
+    image: auth-microservice
+    container_name: auth-microservice
+    build:
+      context: .
+      dockerfile: ./auth-microservice/Dockerfile
+    restart: always
+    environment:
+      -AUTH-MICROSERVICE-PORT: ${AUTH_MICROSERVICE_PORT}
+      -AUTH-DB-PORT: ${AUTH_DB_PORT}
+    depends_on:
+      - auth-db
+    networks:
+      - network
+
+  auth-db:
+    image: mongo
+    container_name: auth-db
+    restart: on-failure
+    volumes:
+      - /Users/ad/Desktop/authdata/data:/data
+    networks:
+      - network
+
+  profile-microservice:
+    image: profile-microservice
+    container_name: profile-microservice
+    build:
+      context: .
+      dockerfile: ./profile-microservice/Dockerfile
+    restart: always
+    environment:
+      -PROFILE-MICROSERVICE-PORT: ${PROFILE_MICROSERVICE_PORT}
+      -PROFILE-DB-PORT: ${PROFILE_DB_PORT}
+    depends_on:
+      - profile-db
+    networks:
+      - network
+
+  profile-db:
+    image: mongo
+    container_name: profile-db
+    restart: on-failure
+    volumes:
+      - /Users/ad/Desktop/profiledata/data:/data
+    networks:
+      - network
+
+  graph-microservice:
+    image: graph-microservice
+    container_name: graph-microservice
+    build:
+      context: .
+      dockerfile: ./graph-microservice/Dockerfile
+    restart: always
+    environment:
+      -GRAPH-MICROSERVICE-PORT: ${GRAPH_MICROSERVICE_PORT}
+      -GRAPH-DB-PORT: ${GRAPH_DB_PORT}
+    depends_on:
+      - graph-db
+    networks:
+      - network
+
+  graph-db:
+    image: neo4j:latest
+    container_name: graph-db
+    volumes:
+      - /Users/ad/Desktop/graphdata/data:/data
+    restart: on-failure
+    environment:
+      NEO4J_AUTH: neo4j/qweqweqwe
+    networks:
+      - network
+    command: neo4j
+
+  tweet-microservice:
+    image: tweet-microservice
+    container_name: tweet-microservice
+    build:
+      context: .
+      dockerfile: ./tweet-microservice/Dockerfile
+    restart: always
+    environment:
+      -TWEET-MICROSERVICE-PORT: ${TWEET_MICROSERVICE_PORT}
+      -TWEET-DB-PORT: ${TWEET_DB_PORT}
+    depends_on:
+      tweet-db:
+        condition: service_healthy
+    networks:
+      - network
+
+  tweet-db:
+    image: cassandra
+    container_name: tweet-db
+    restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "[ $$(nodetool statusgossip) = running ]"]
+      interval: 5s
+      timeout: 10s
+      retries: 6
+    volumes:
+      - /Users/ad/Desktop/tweetdata/db:/data/db
+    networks:
+      - network
+
+  api_gateway:
+    build:
+      context: ./api-gateway/
+      dockerfile: Dockerfile
+    container_name: api_gateway
+    restart: on-failure
+    depends_on:
+      - tweet-microservice
+      - auth-microservice
+      - profile-microservice
+      - graph-microservice
+    ports:
+      - 443:443
+    networks:
+      - network
+
+  # jaeger:
+  #    image: jaegertracing/all-in-one:latest
+  #    ports:
+  #      - "6831:6831/udp"
+  #      - "16686:16686"
+  #    networks:
+  #      - network
+
+  # collector:
+  #    image: otel/opentelemetry-collector:latest
+  #    command: [ "--config=/etc/otel-collector-config.yaml" ]
+  #    volumes:
+  #      - ./api-gateway/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+  #    networks:
+  #      - network
+
+networks:
+  network:
+    driver: bridge
+
+volumes:
+  auth-db:
+  profile-db:
+  graph-db:
+  tweet-db:
